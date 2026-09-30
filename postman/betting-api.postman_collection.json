@@ -1,0 +1,1831 @@
+{
+  "info": {
+    "name": "Single Bet Placement API",
+    "description": "Checks follow the spec, so requests that reproduce known bugs fail on purpose (see bugs.md). Run the folders in order; each money-related folder resets the balance first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-user-id",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{userId}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 Setup",
+      "description": "Loads matches and picks test data. Run first.",
+      "item": [
+        {
+          "name": "Get matches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "matches"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const today = new Date().toISOString().slice(0, 10);",
+                  "const matches = pm.response.json();",
+                  "const upcoming = matches.find(m => m.kickoffDate >= today);",
+                  "const past = matches.find(m => m.kickoffDate < today);",
+                  "pm.test(\"has an upcoming match\", () => pm.expect(upcoming).to.exist);",
+                  "pm.collectionVariables.set(\"upcomingMatchId\", upcoming.id);",
+                  "pm.collectionVariables.set(\"upcomingOdds\", JSON.stringify(upcoming.odds));",
+                  "if (past) pm.collectionVariables.set(\"pastMatchId\", past.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const balance = pm.response.json().balance;",
+                  "pm.test(\"currency is EUR\", () => pm.expect(pm.response.json().currency).to.eql(\"EUR\"));",
+                  "pm.collectionVariables.set(\"balance\", balance);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TC-02 Stake above balance",
+      "description": "Reject a stake above the available balance (spec 4.1). Covers BUG-02.",
+      "item": [
+        {
+          "name": "Reset balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance after reset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const balance = pm.response.json().balance;",
+                  "pm.collectionVariables.set(\"balance\", balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bet 100 to go below max stake",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"balance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake balance + 0.01 is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{overStake}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const balance = Number(pm.collectionVariables.get(\"balance\"));",
+                  "pm.collectionVariables.set(\"overStake\", (balance + 0.01).toFixed(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 4xx\", () => pm.expect(pm.response.code).to.be.within(400, 499));",
+                  "pm.test(\"message is Insufficient balance\", () => pm.expect(pm.response.json().message).to.eql(\"Insufficient balance\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance unchanged after rejection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const balance = pm.response.json().balance;",
+                  "pm.test(\"balance unchanged\", () => pm.expect(balance).to.eql(Number(pm.collectionVariables.get(\"balance\"))));",
+                  "pm.collectionVariables.set(\"balance\", balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake equal to balance is accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{balance}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"balance is 0\", () => pm.expect(pm.response.json().balance).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TC-04 Stake boundaries",
+      "description": "Min €1.00, max €100.00, 2 decimals (spec 3, 4.1). Balance reset before each case.",
+      "item": [
+        {
+          "name": "Reset before 0.99",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 0.99 (just below min) -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{s_0.99}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"s_0.99\", \"0.99\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset before 1.00",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 1.00 (min) -> 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{s_1.00}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"s_1.00\", \"1.00\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset before 100.00",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 100.00 (max) -> 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{s_100.00}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"s_100.00\", \"100.00\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset before 100.01",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 100.01 (just above max) -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{s_100.01}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"s_100.01\", \"100.01\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset before 1.001",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 1.001 (3 decimals) -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": {{s_1.001}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"s_1.001\", \"1.001\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Stake validation",
+      "description": "Invalid stake values (spec 4.1). Covers BUG-03.",
+      "item": [
+        {
+          "name": "Reset balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake 0 -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negative stake -> 422 (BUG-03)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": -5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"no bet is created, balance unchanged\", () => {",
+                  "    pm.expect(pm.response.json()).to.not.have.property(\"balance\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake as string -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": \"10\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake null -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake missing -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 4xx\", () => pm.expect(pm.response.code).to.be.within(400, 499));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TC-03 Selection mapping",
+      "description": "HOME/DRAW/AWAY map to the right odds; payout = stake x odds.",
+      "item": [
+        {
+          "name": "Reset balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "HOME uses odds.home",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const odds = JSON.parse(pm.collectionVariables.get(\"upcomingOdds\"));",
+                  "pm.test(\"selection is HOME\", () => pm.expect(body.selection).to.eql(\"HOME\"));",
+                  "pm.test(\"odds = odds.home\", () => pm.expect(body.odds).to.eql(odds.home));",
+                  "pm.test(\"payout = stake x odds\", () => pm.expect(body.payout).to.eql(Math.round(body.stake * body.odds * 100) / 100));",
+                  "pm.test(\"currency is EUR\", () => pm.expect(body.currency).to.eql(\"EUR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DRAW uses odds.draw",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"DRAW\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const odds = JSON.parse(pm.collectionVariables.get(\"upcomingOdds\"));",
+                  "pm.test(\"selection is DRAW\", () => pm.expect(body.selection).to.eql(\"DRAW\"));",
+                  "pm.test(\"odds = odds.draw\", () => pm.expect(body.odds).to.eql(odds.draw));",
+                  "pm.test(\"payout = stake x odds\", () => pm.expect(body.payout).to.eql(Math.round(body.stake * body.odds * 100) / 100));",
+                  "pm.test(\"currency is EUR\", () => pm.expect(body.currency).to.eql(\"EUR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "AWAY uses odds.away",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"AWAY\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const odds = JSON.parse(pm.collectionVariables.get(\"upcomingOdds\"));",
+                  "pm.test(\"selection is AWAY\", () => pm.expect(body.selection).to.eql(\"AWAY\"));",
+                  "pm.test(\"odds = odds.away\", () => pm.expect(body.odds).to.eql(odds.away));",
+                  "pm.test(\"payout = stake x odds\", () => pm.expect(body.payout).to.eql(Math.round(body.stake * body.odds * 100) / 100));",
+                  "pm.test(\"currency is EUR\", () => pm.expect(body.currency).to.eql(\"EUR\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Selection and match validation",
+      "description": "Spec 4.2, 1. Covers BUG-04.",
+      "item": [
+        {
+          "name": "Reset balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid selection -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOMEX\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lowercase selection -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"home\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing selection -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown match -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"does-not-exist\",\n  \"selection\": \"HOME\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty match id -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"\",\n  \"selection\": \"HOME\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Past match is rejected (BUG-04)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{pastMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 4xx\", () => pm.expect(pm.response.code).to.be.within(400, 499));",
+                  "pm.test(\"no bet is created, balance unchanged\", () => {",
+                  "    pm.expect(pm.response.json()).to.not.have.property(\"balance\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TC-06 User context",
+      "description": "Missing or empty x-user-id -> 401 (spec 4.3, 5.1).",
+      "item": [
+        {
+          "name": "Balance without header -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance with empty header -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": ""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Place bet without header -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matchId\": \"{{upcomingMatchId}}\",\n  \"selection\": \"HOME\",\n  \"stake\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Matches without header -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "matches"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Protocol",
+      "description": "Malformed bodies and unsupported methods (spec 4.3, 5.3).",
+      "item": [
+        {
+          "name": "Malformed JSON -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"matchId\": ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Array body -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "[1, 2]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/place-bet -> 405",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/place-bet",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "place-bet"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 405\", () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/balance -> 405",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 405\", () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reset balance",
+      "description": "Response body and persisted state must match (spec 5.3).",
+      "item": [
+        {
+          "name": "Reset balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reset-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reset-balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"resetBalance\", pm.response.json().balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Persisted balance equals reset response",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "balance"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const balance = pm.response.json().balance;",
+                  "pm.test(\"persisted balance equals reset response\", () => pm.expect(balance).to.eql(Number(pm.collectionVariables.get(\"resetBalance\"))));",
+                  "pm.collectionVariables.set(\"balance\", balance);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://qae-assignment-tau.vercel.app"
+    },
+    {
+      "key": "userId",
+      "value": "<your-user-id>"
+    }
+  ]
+}

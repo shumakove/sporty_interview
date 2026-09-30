@@ -1,0 +1,26 @@
+[project]
+name = "sporty-interview"
+version = "0.1.0"
+description = "QA automation for the Single Bet Placement feature"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "selenium>=4.49.0",
+]
+
+[dependency-groups]
+dev = [
+    "allure-pytest>=2.16.2",
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--alluredir=allure-results"
+markers = [
+    "ui: browser tests (Selenium)",
+    "api: API tests (requests)",
+]
